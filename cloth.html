@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Simulations | Cloth Physics</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0f1e;
+        }
+        canvas {
+            display: block;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 30px;
+            color: white;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
+            border-left: 4px solid cyan;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 40px;
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        button {
+            background: #1e2a3a;
+            border: none;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-family: inherit;
+        }
+        button:hover {
+            background: cyan;
+            color: black;
+            box-shadow: 0 0 12px cyan;
+        }
+        a {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: cyan;
+            text-decoration: none;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-weight: bold;
+            z-index: 20;
+            backdrop-filter: blur(4px);
+        }
+        a:hover { color: white; background: cyan; }
+    </style>
+</head>
+<body>
+<a href="index.html">← BACK HOME</a>
+<div class="controls">
+    <button id="windBtn">💨 WIND: OFF</button>
+    <button id="resetBtn">🔄 RESET CLOTH</button>
+</div>
+<div class="info">
+    🧵 Cloth Simulation | Drag points to interact | Mass‑spring with gravity
+</div>
+<canvas id="clothCanvas"></canvas>
+<script>
+    const canvas = document.getElementById('clothCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+    function resizeCanvas() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        initCloth();
+    }
+
+    // Cloth parameters
+    const COLUMNS = 35;
+    const ROWS = 25;
+    const SPACING = 14;
+    const START_X = (width / 2) - (COLUMNS * SPACING) / 2;
+    const START_Y = 80;
+    
+    let points = [];
+    let springs = [];
+    let windActive = false;
+    let windForce = { x: 0.4, y: 0.1 };
+    let mouse = { x: null, y: null, radius: 35, strength: 0.8, dragging: false };
+    let dragIndex = -1;
+
+    class Point {
+        constructor(x, y, fixed = false) {
+            this.x = x; this.y = y;
+            this.oldX = x; this.oldY = y;
+            this.fixed = fixed;
+        }
+        update() {
+            if (this.fixed) return;
+            let vx = this.x - this.oldX;
+            let vy = this.y - this.oldY;
+            this.oldX = this.x;
+            this.oldY = this.y;
+            this.x += vx;
+            this.y += vy;
+            // gravity
+            this.y += 0.35;
+        }
+        constrain() {
+            if (this.fixed) return;
+            // boundaries
+            if (this.x < 5) this.x = 5;
+            if (this.x > width - 5) this.x = width - 5;
+            if (this.y > height - 5) this.y = height - 5;
+            if (this.y < 0) this.y = 0;
+        }
+    }
+
+    function initCloth() {
+        points = [];
+        springs = [];
+        const startX = (width / 2) - (COLUMNS * SPACING) / 2;
+        const startY = 70;
+        for (let i = 0; i <= COLUMNS; i++) {
+            points[i] = [];
+            for (let j = 0; j <= ROWS; j++) {
+                const fixed = (j === 0); // top row fixed
+                const x = startX + i * SPACING;
+                const y = startY + j * SPACING;
+                points[i][j] = new Point(x, y, fixed);
+            }
+        }
+        // create structural, shear, bend springs
+        for (let i = 0; i <= COLUMNS; i++) {
+            for (let j = 0; j <= ROWS; j++) {
+                if (i < COLUMNS) {
+                    springs.push({ p1: points[i][j], p2: points[i+1][j], rest: SPACING, stiffness: 0.25 });
+                }
+                if (j < ROWS) {
+                    springs.push({ p1: points[i][j], p2: points[i][j+1], rest: SPACING, stiffness: 0.25 });
+                }
+                if (i < COLUMNS && j < ROWS) {
+                    springs.push({ p1: points[i][j], p2: points[i+1][j+1], rest: SPACING * 1.414, stiffness: 0.18 });
+                    springs.push({ p1: points[i+1][j], p2: points[i][j+1], rest: SPACING * 1.414, stiffness: 0.18 });
+                }
+                // bend
+                if (i < COLUMNS - 1) {
+                    springs.push({ p1: points[i][j], p2: points[i+2][j], rest: SPACING*2, stiffness: 0.12 });
+                }
+                if (j < ROWS - 1) {
+                    springs.push({ p1: points[i][j], p2: points[i][j+2], rest: SPACING*2, stiffness: 0.12 });
+                }
+            }
+        }
+    }
+
+    function solveSprings() {
+        for (let s of springs) {
+            const dx = s.p1.x - s.p2.x;
+            const dy = s.p1.y - s.p2.y;
+            const dist = Math.hypot(dx, dy);
+            const diff = (dist - s.rest) / dist;
+            const force = diff * s.stiffness;
+            const fx = dx * force;
+            const fy = dy * force;
+            if (!s.p1.fixed) { s.p1.x -= fx; s.p1.y -= fy; }
+            if (!s.p2.fixed) { s.p2.x += fx; s.p2.y += fy; }
+        }
+    }
+
+    function applyWind() {
+        if (!windActive) return;
+        for (let i = 0; i <= COLUMNS; i++) {
+            for (let j = 0; j <= ROWS; j++) {
+                const p = points[i][j];
+                if (!p.fixed) {
+                    p.x += windForce.x * 0.28;
+                    p.y += windForce.y * 0.12;
+                }
+            }
+        }
+    }
+
+    function handleMouseDrag() {
+        if (!mouse.dragging || mouse.x === null) return;
+        let bestDist = mouse.radius * 1.5;
+        dragIndex = -1;
+        for (let i = 0; i <= COLUMNS; i++) {
+            for (let j = 0; j <= ROWS; j++) {
+                const p = points[i][j];
+                const dx = p.x - mouse.x;
+                const dy = p.y - mouse.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    dragIndex = { i, j };
+                }
+            }
+        }
+        if (dragIndex !== -1) {
+            const p = points[dragIndex.i][dragIndex.j];
+            p.x = mouse.x;
+            p.y = mouse.y;
+            p.oldX = mouse.x;
+            p.oldY = mouse.y;
+        }
+    }
+
+    function update() {
+        // verlet integration
+        for (let i = 0; i <= COLUMNS; i++) {
+            for (let j = 0; j <= ROWS; j++) {
+                points[i][j].update();
+            }
+        }
+        // solve constraints multiple times
+        for (let iter = 0; iter < 5; iter++) {
+            solveSprings();
+            for (let i = 0; i <= COLUMNS; i++) {
+                for (let j = 0; j <= ROWS; j++) {
+                    points[i][j].constrain();
+                }
+            }
+        }
+        applyWind();
+        handleMouseDrag();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+        // draw springs (lines)
+        ctx.beginPath();
+        ctx.strokeStyle = '#9bd7ff';
+        ctx.lineWidth = 1.2;
+        for (let s of springs) {
+            ctx.beginPath();
+            ctx.moveTo(s.p1.x, s.p1.y);
+            ctx.lineTo(s.p2.x, s.p2.y);
+            ctx.stroke();
+        }
+        // draw points
+        for (let i = 0; i <= COLUMNS; i++) {
+            for (let j = 0; j <= ROWS; j++) {
+                const p = points[i][j];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2);
+                ctx.fillStyle = p.fixed ? '#ffaa66' : '#80c0ff';
+                ctx.fill();
+                ctx.shadowBlur = 4;
+            }
+        }
+        ctx.shadowBlur = 0;
+        // mouse glow effect
+        if (mouse.x && mouse.dragging) {
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, 25, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(0,255,255,0.2)';
+            ctx.fill();
+        }
+    }
+
+    function animate() {
+        update();
+        draw();
+        requestAnimationFrame(animate);
+    }
+
+    // Event handling
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let clientX, clientY;
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    function onMouseDown(e) {
+        e.preventDefault();
+        const pos = getMousePos(e);
+        mouse.x = pos.x;
+        mouse.y = pos.y;
+        mouse.dragging = true;
+    }
+    function onMouseMove(e) {
+        if (!mouse.dragging) return;
+        const pos = getMousePos(e);
+        mouse.x = pos.x;
+        mouse.y = pos.y;
+    }
+    function onMouseUp() {
+        mouse.dragging = false;
+        dragIndex = -1;
+    }
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('touchstart', onMouseDown);
+    window.addEventListener('touchmove', onMouseMove);
+    window.addEventListener('touchend', onMouseUp);
+
+    // controls
+    document.getElementById('windBtn').addEventListener('click', () => {
+        windActive = !windActive;
+        document.getElementById('windBtn').innerHTML = windActive ? "💨 WIND: ON" : "💨 WIND: OFF";
+    });
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        initCloth();
+    });
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+    });
+    resizeCanvas();
+    animate();
+</script>
+</body>
+</html>
