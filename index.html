@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Simulations | Hyper‑Physics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 30%, #0a0f1e, #03060c);
+            font-family: 'Segoe UI', 'Poppins', system-ui, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .home-container {
+            max-width: 1300px;
+            width: 100%;
+            background: rgba(12, 20, 30, 0.55);
+            backdrop-filter: blur(12px);
+            border-radius: 3rem;
+            border: 1px solid rgba(0, 255, 255, 0.25);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 255, 255, 0.1) inset;
+            padding: 2.5rem 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .title {
+            text-align: center;
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #aaffff, #3a86ff, #bc00ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 10px rgba(0,255,255,0.2);
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .sub {
+            text-align: center;
+            color: #8ab3cf;
+            font-weight: 500;
+            letter-spacing: 1px;
+            margin-bottom: 3rem;
+            border-bottom: 1px dashed rgba(100,200,255,0.4);
+            display: inline-block;
+            width: auto;
+            margin-left: auto;
+            margin-right: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .button-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .sim-card {
+            background: rgba(10, 20, 30, 0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 2rem;
+            padding: 1.8rem 1.5rem;
+            width: 280px;
+            text-align: center;
+            transition: transform 0.25s ease, box-shadow 0.3s;
+            border: 1px solid rgba(0, 200, 255, 0.3);
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .sim-card:hover {
+            transform: translateY(-12px);
+            border-color: #0cf;
+            box-shadow: 0 20px 30px rgba(0, 160, 255, 0.3);
+            background: rgba(20, 40, 60, 0.8);
+        }
+
+        .sim-icon {
+            font-size: 3.8rem;
+            margin-bottom: 1rem;
+        }
+
+        .sim-card h3 {
+            font-size: 1.8rem;
+            color: #d0f0ff;
+            margin-bottom: 0.8rem;
+        }
+
+        .sim-card p {
+            color: #9bb9d4;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .launch-btn {
+            background: linear-gradient(90deg, #0a6c8c, #0a2c4e);
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 3rem;
+            color: white;
+            font-weight: bold;
+            letter-spacing: 1px;
+            transition: 0.2s;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .sim-card a {
+            text-decoration: none;
+        }
+
+        .launch-btn:hover {
+            background: linear-gradient(90deg, #0cf, #3a6ea5);
+            box-shadow: 0 0 12px cyan;
+            transform: scale(1.02);
+        }
+
+        footer {
+            margin-top: 3rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #5a7a9a;
+        }
+
+        @media (max-width: 780px) {
+            .home-container { padding: 1.5rem; }
+            .title { font-size: 2.3rem; }
+            .sim-card { width: 240px; }
+        }
+    </style>
+</head>
+<body>
+<div class="home-container">
+    <div class="title">⚡ AI SIMULATIONS</div>
+    <div style="text-align: center;"><span class="sub">next‑gen physics playground</span></div>
+    <div class="button-grid">
+        <div class="sim-card">
+            <div class="sim-icon">👘</div>
+            <h3>Cloth Physics</h3>
+            <p>Realistic fabric simulation with drag & wind — mass-spring system</p>
+            <a href="cloth.html"><button class="launch-btn">🧵 EXPLORE CLOTH</button></a>
+        </div>
+        <div class="sim-card">
+            <div class="sim-icon">🔫</div>
+            <h3>Realistic Pistol</h3>
+            <p>Precision shooting, recoil, target drift & scoring system</p>
+            <a href="pistol.html"><button class="launch-btn">🎯 RANGE SIM</button></a>
+        </div>
+        <div class="sim-card">
+            <div class="sim-icon">🌀</div>
+            <h3>Satisfying Physics</h3>
+            <p>Bouncing balls, rope dynamics & interactive ripples</p>
+            <a href="physics.html"><button class="launch-btn">✨ PLAYGROUND</button></a>
+        </div>
+    </div>
+    <footer>⚡ hyper-realistic simulations | drag & click interactions</footer>
+</div>
+</body>
+</html>
