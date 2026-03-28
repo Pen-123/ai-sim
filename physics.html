@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Simulations | Satisfying Physics</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #030712;
+            font-family: 'Segoe UI', system-ui;
+        }
+        canvas {
+            display: block;
+            cursor: pointer;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: #0f212eb3;
+            backdrop-filter: blur(12px);
+            padding: 12px 20px;
+            border-radius: 40px;
+            display: flex;
+            gap: 16px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        button {
+            background: #1f4a5e;
+            border: none;
+            padding: 6px 18px;
+            border-radius: 40px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: cyan;
+            color: black;
+            box-shadow: 0 0 12px cyan;
+        }
+        a {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: cyan;
+            background: #000000aa;
+            padding: 6px 16px;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: bold;
+            z-index: 30;
+        }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #00000099;
+            backdrop-filter: blur(8px);
+            padding: 8px 18px;
+            border-radius: 40px;
+            color: #ccddff;
+            font-size: 14px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<a href="index.html">← HOME</a>
+<div class="controls">
+    <button id="addBalls">➕ ADD BALLS (10)</button>
+    <button id="gravityToggle">🔄 GRAVITY: ON</button>
+    <button id="clearBtn">🧹 CLEAR ALL</button>
+</div>
+<div class="info-panel">✨ Satisfying collisions · mouse attraction · elastic energy</div>
+<canvas id="physicsCanvas"></canvas>
+<script>
+    const canvas = document.getElementById('physicsCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let balls = [];
+    let gravityOn = true;
+    let mouseX = null, mouseY = null;
+    let mouseRadius = 100;
+    let mouseForce = 1.2;
+
+    class Ball {
+        constructor(x, y, vx, vy, radius, color) {
+            this.x = x; this.y = y;
+            this.vx = vx; this.vy = vy;
+            this.radius = radius;
+            this.color = color;
+            this.mass = radius * 0.8;
+        }
+        update() {
+            if (gravityOn) this.vy += 0.2;
+            this.x += this.vx;
+            this.y += this.vy;
+            // boundary collisions with bounce & energy loss
+            if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx * 0.95; }
+            if (this.x + this.radius > width) { this.x = width - this.radius; this.vx = -this.vx * 0.95; }
+            if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy * 0.95; }
+            if (this.y + this.radius > height) { this.y = height - this.radius; this.vy = -this.vy * 0.92; }
+        }
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = 'rgba(0,255,200,0.5)';
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            // highlight core
+            ctx.beginPath();
+            ctx.arc(this.x-2, this.y-2, this.radius*0.3, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255,255,200,0.7)';
+            ctx.fill();
+        }
+    }
+
+    function handleCollisions() {
+        for (let i = 0; i < balls.length; i++) {
+            for (let j = i+1; j < balls.length; j++) {
+                const b1 = balls[i];
+                const b2 = balls[j];
+                const dx = b1.x - b2.x;
+                const dy = b1.y - b2.y;
+                const dist = Math.hypot(dx, dy);
+                const minDist = b1.radius + b2.radius;
+                if (dist < minDist) {
+                    const angle = Math.atan2(dy, dx);
+                    const overlap = minDist - dist;
+                    const moveX = Math.cos(angle) * overlap * 0.5;
+                    const moveY = Math.sin(angle) * overlap * 0.5;
+                    if (!b1.fixed) { b1.x += moveX; b1.y += moveY; }
+                    if (!b2.fixed) { b2.x -= moveX; b2.y -= moveY; }
+                    
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    const vrelx = b1.vx - b2.vx;
+                    const vrely = b1.vy - b2.vy;
+                    const velAlong = vrelx * nx + vrely * ny;
+                    if (velAlong < 0) {
+                        const e = 0.85;
+                        const m1 = b1.mass, m2 = b2.mass;
+                        const imp = (1+e) * velAlong / (m1 + m2);
+                        b1.vx -= imp * m2 * nx;
+                        b1.vy -= imp * m2 * ny;
+                        b2.vx += imp * m1 * nx;
+                        b2.vy += imp * m1 * ny;
+                    }
+                }
+            }
+        }
+    }
+
+    function applyMouseForce() {
+        if (mouseX === null) return;
+        for (let b of balls) {
+            const dx = b.x - mouseX;
+            const dy = b.y - mouseY;
+            const dist = Math.hypot(dx, dy);
+            if (dist < mouseRadius) {
+                const force = (1 - dist / mouseRadius) * mouseForce;
+                const angle = Math.atan2(dy, dx);
+                const fx = Math.cos(angle) * force * 1.2;
+                const fy = Math.sin(angle) * force * 1.2;
+                b.vx += fx;
+                b.vy += fy;
+            }
+        }
+    }
+
+    function addRandomBalls(count) {
+        for (let i = 0; i < count; i++) {
+            const radius = 8 + Math.random() * 16;
+            const x = Math.random() * (width - radius*2) + radius;
+            const y = Math.random() * (height - radius*2) + radius;
+            const vx = (Math.random() - 0.5) * 4;
+            const vy = (Math.random() - 0.5) * 4;
+            const hue = (Math.random() * 60 + 180) % 360;
+            const color = `hsl(${hue}, 80%, 60%)`;
+            balls.push(new Ball(x, y, vx, vy, radius, color));
+        }
+    }
+
+    function clearBalls() {
+        balls = [];
+        addRandomBalls(12); // keep some action
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+        // draw background glow
+        ctx.fillStyle = '#03071e';
+        ctx.fillRect(0,0,width,height);
+        
+        for (let b of balls) {
+            b.update();
+        }
+        handleCollisions();
+        applyMouseForce();
+        
+        for (let b of balls) {
+            b.draw();
+        }
+        
+        // draw mouse influence field
+        if (mouseX !== null) {
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, mouseRadius, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(0,255,200,0.08)';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, 8, 0, Math.PI*2);
+            ctx.fillStyle = 'cyan';
+            ctx.fill();
+        }
+        requestAnimationFrame(animate);
+    }
+
+    function resizeCanvas() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        balls = [];
+        addRandomBalls(18);
+    }
+
+    // Mouse events for attraction
+    function onMouseMove(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let clientX, clientY;
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        mouseX = (clientX - rect.left) * scaleX;
+        mouseY = (clientY - rect.top) * scaleY;
+    }
+    function onMouseLeave() { mouseX = null; mouseY = null; }
+    
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMouseMove(e); });
+    canvas.addEventListener('touchend', () => { mouseX = null; });
+
+    document.getElementById('addBalls').addEventListener('click', () => addRandomBalls(10));
+    document.getElementById('clearBtn').addEventListener('click', () => clearBalls());
+    const gravBtn = document.getElementById('gravityToggle');
+    gravBtn.addEventListener('click', () => {
+        gravityOn = !gravityOn;
+        gravBtn.innerText = gravityOn ? "🔄 GRAVITY: ON" : "🔄 GRAVITY: OFF";
+    });
+    
+    window.addEventListener('resize', () => resizeCanvas());
+    resizeCanvas();
+    animate();
+</script>
+</body>
+</html>
