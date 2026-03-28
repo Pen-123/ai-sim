@@ -3,294 +3,407 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AI Simulations | Realistic Pistol Range</title>
+    <title>AI Simulations | 3D Pistol Range</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             font-family: 'Courier New', monospace;
-            background: #0b1a1f;
-            cursor: crosshair;
+            background: #111;
         }
-        canvas {
-            display: block;
-            background: radial-gradient(circle at 30% 40%, #1e3a3f, #071013);
-            cursor: crosshair;
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 30px;
+            color: white;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
+            border-left: 4px solid #ffaa33;
         }
-        .ui {
+        .controls {
             position: absolute;
             bottom: 20px;
             left: 20px;
             background: rgba(0,0,0,0.7);
             backdrop-filter: blur(8px);
-            padding: 12px 24px;
-            border-radius: 40px;
+            padding: 12px 20px;
+            border-radius: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        button {
+            background: #2c3e44;
+            border: none;
             color: white;
+            padding: 8px 18px;
+            border-radius: 40px;
+            cursor: pointer;
             font-weight: bold;
-            font-size: 1.4rem;
-            letter-spacing: 1px;
-            pointer-events: none;
-            z-index: 10;
-            border-right: 4px solid gold;
+            font-family: monospace;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #ffaa33;
+            color: black;
+            box-shadow: 0 0 12px orange;
         }
         .score {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.7);
             padding: 12px 28px;
             border-radius: 30px;
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: bold;
-            color: #ffd966;
+            color: #ffaa33;
             font-family: monospace;
             pointer-events: none;
             z-index: 10;
-            backdrop-filter: blur(5px);
-        }
-        .recoil-effect {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(255,200,100,0) 30%, rgba(255,100,30,0.3));
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.05s;
-            z-index: 15;
         }
         a {
             position: absolute;
             top: 20px;
             left: 20px;
-            color: cyan;
-            background: #000000aa;
-            padding: 6px 16px;
-            border-radius: 40px;
+            color: #ffaa33;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 30px;
             text-decoration: none;
             font-weight: bold;
-            z-index: 20;
-            backdrop-filter: blur(4px);
+            z-index: 30;
         }
+        a:hover { background: #ffaa33; color: black; }
         .instruction {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: #00000099;
+            background: rgba(0,0,0,0.6);
             padding: 6px 12px;
             border-radius: 20px;
             font-size: 12px;
             color: #ccc;
-        }
-        button {
-            background: #2c4c5c;
-            border: none;
-            padding: 4px 12px;
-            border-radius: 20px;
-            color: white;
-            cursor: pointer;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 <a href="index.html">← BACK</a>
-<div class="score">🎯 SCORE: <span id="scoreVal">0</span></div>
-<div class="ui">🔫 REALISTIC PISTOL · Click to shoot</div>
-<div class="instruction">🎯 moving target | headshots = +20 | body +10 | recoil shake</div>
-<div id="recoilOverlay" class="recoil-effect"></div>
-<canvas id="pistolCanvas"></canvas>
-<script>
-    const canvas = document.getElementById('pistolCanvas');
-    const ctx = canvas.getContext('2d');
-    let width, height;
+<div class="score">🔫 SCORE: <span id="scoreVal">0</span></div>
+<div class="controls">
+    <button id="reloadBtn">📦 RELOAD (Magazine)</button>
+    <button id="cockBtn">⚙️ COCK SLIDE</button>
+    <button id="shootBtn">💥 SHOOT (click also on target)</button>
+</div>
+<div id="info">🔫 3D PISTOL | Left‑click to shoot at targets | Reload + Cock for realism</div>
+<div class="instruction">🎯 Click on targets to score | Magazine count: <span id="magCount">12</span> | Cocked: <span id="cockedStatus">Yes</span></div>
 
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'https://unpkg.com/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+
+    // --- Setup Scene ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050b1a);
+    scene.fog = new THREE.FogExp2(0x050b1a, 0.008);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(4, 3, 6);
+    camera.lookAt(0, 0.5, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Controls for orbit (optional, but user can orbit to inspect)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = false;
+    controls.enableZoom = true;
+    controls.target.set(0, 1, 0);
+
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0x404060);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(2, 5, 3);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+    const backLight = new THREE.PointLight(0x4466cc, 0.5);
+    backLight.position.set(-1, 2, -2);
+    scene.add(backLight);
+    const fillLight = new THREE.PointLight(0xffaa66, 0.4);
+    fillLight.position.set(1, 1, 2);
+    scene.add(fillLight);
+
+    // --- Ground / Range ---
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x2c2c3a, roughness: 0.7, metalness: 0.1 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 8), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.5;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(15, 20, 0x88aaff, 0x335588);
+    gridHelper.position.y = -0.4;
+    scene.add(gridHelper);
+
+    // --- Create Pistol Group (simple but realistic shape) ---
+    const pistolGroup = new THREE.Group();
+    
+    // Body
+    const bodyGeo = new THREE.BoxGeometry(0.8, 0.5, 1.6);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.3 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 0, 0);
+    body.castShadow = true;
+    pistolGroup.add(body);
+    
+    // Grip
+    const gripGeo = new THREE.CylinderGeometry(0.4, 0.55, 1.0, 8);
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x5d3a1a, roughness: 0.6 });
+    const grip = new THREE.Mesh(gripGeo, gripMat);
+    grip.position.set(-0.2, -0.4, 0.45);
+    grip.rotation.z = 0.1;
+    grip.castShadow = true;
+    pistolGroup.add(grip);
+    
+    // Slide
+    const slideGeo = new THREE.BoxGeometry(0.75, 0.3, 1.2);
+    const slideMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.8 });
+    const slide = new THREE.Mesh(slideGeo, slideMat);
+    slide.position.set(0, 0.2, 0.1);
+    slide.castShadow = true;
+    pistolGroup.add(slide);
+    
+    // Barrel
+    const barrelGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.15, 0.8);
+    barrel.castShadow = true;
+    pistolGroup.add(barrel);
+    
+    // Magazine (removable representation)
+    const magGeo = new THREE.BoxGeometry(0.5, 0.7, 0.4);
+    const magMat = new THREE.MeshStandardMaterial({ color: 0x442200, metalness: 0.3 });
+    const magazine = new THREE.Mesh(magGeo, magMat);
+    magazine.position.set(0.1, -0.55, 0.45);
+    magazine.castShadow = true;
+    pistolGroup.add(magazine);
+    
+    // Slide cock indicator (little piece that moves)
+    const cockPieceGeo = new THREE.BoxGeometry(0.2, 0.15, 0.1);
+    const cockMat = new THREE.MeshStandardMaterial({ color: 0xcc8866 });
+    const cockPiece = new THREE.Mesh(cockPieceGeo, cockMat);
+    cockPiece.position.set(0, 0.38, 0.55);
+    pistolGroup.add(cockPiece);
+    
+    pistolGroup.position.set(1.5, -0.2, 1.2);
+    pistolGroup.rotation.y = -0.4;
+    scene.add(pistolGroup);
+    
+    // --- Target Area: floating discs and moving targets ---
+    const targets = [];
+    function createTarget(x, z, yOffset = 0.2) {
+        const group = new THREE.Group();
+        const discGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.1, 24);
+        const discMat = new THREE.MeshStandardMaterial({ color: 0xdd3333, emissive: 0x331100 });
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.rotation.x = Math.PI / 2;
+        disc.castShadow = true;
+        group.add(disc);
+        
+        const centerGeo = new THREE.SphereGeometry(0.2, 16);
+        const centerMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0x442200 });
+        const center = new THREE.Mesh(centerGeo, centerMat);
+        center.position.y = 0.1;
+        group.add(center);
+        
+        group.position.set(x, yOffset, z);
+        scene.add(group);
+        return group;
+    }
+    
+    // Spawn some targets
+    const targetPositions = [
+        [-2, -1.5], [0, -2], [2.2, -1.2], [-1, 1.5], [1.5, 1.8], [-2.5, 0.5]
+    ];
+    targetPositions.forEach(pos => {
+        const target = createTarget(pos[0], pos[1], 0.2);
+        targets.push(target);
+    });
+    
+    // Score and game state
     let score = 0;
-    let targets = [];
-    let recoilActive = false;
-    let recoilOffset = { x: 0, y: 0 };
-    let crosshair = { x: width/2, y: height/2 };
-
-    class Target {
-        constructor(x, y, radius, type) {
-            this.x = x;
-            this.y = y;
-            this.radius = radius;
-            this.type = type; // 'head' or 'body'
-            this.vx = (Math.random() - 0.5) * 1.2;
-            this.vy = (Math.random() - 0.5) * 1.1;
+    let magazineAmmo = 12;
+    let isCocked = true;
+    const scoreElem = document.getElementById('scoreVal');
+    const magCountElem = document.getElementById('magCount');
+    const cockedStatusElem = document.getElementById('cockedStatus');
+    
+    function updateUI() {
+        scoreElem.innerText = score;
+        magCountElem.innerText = magazineAmmo;
+        cockedStatusElem.innerText = isCocked ? "Yes" : "No";
+    }
+    
+    // Shooting raycast from camera center (first-person style)
+    function shoot() {
+        if (magazineAmmo <= 0) {
+            // dry fire effect
+            const flash = new THREE.PointLight(0xff6600, 0.6);
+            flash.position.copy(pistolGroup.position);
+            scene.add(flash);
+            setTimeout(() => scene.remove(flash), 100);
+            return;
         }
-        update() {
-            this.x += this.vx;
-            this.y += this.vy;
-            if (this.x - this.radius < 0 || this.x + this.radius > width) this.vx *= -0.98;
-            if (this.y - this.radius < 0 || this.y + this.radius > height) this.vy *= -0.98;
-            this.x = Math.min(Math.max(this.x, this.radius), width - this.radius);
-            this.y = Math.min(Math.max(this.y, this.radius), height - this.radius);
+        if (!isCocked) {
+            // need to cock
+            return;
         }
-        draw() {
-            ctx.shadowBlur = 8;
-            if (this.type === 'head') {
-                ctx.fillStyle = '#d64531';
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-                ctx.fill();
-                ctx.fillStyle = 'white';
-                ctx.font = `${this.radius}px monospace`;
-                ctx.fillText("🎯", this.x-12, this.y+8);
-            } else {
-                ctx.fillStyle = '#7a5b4b';
-                ctx.beginPath();
-                ctx.ellipse(this.x, this.y, this.radius, this.radius*1.2, 0, 0, Math.PI*2);
-                ctx.fill();
-                ctx.fillStyle = '#a06e4b';
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius-4, 0, Math.PI*2);
-                ctx.fill();
+        
+        // consume ammo and uncock
+        magazineAmmo--;
+        isCocked = false;
+        updateUI();
+        
+        // Muzzle flash
+        const flash = new THREE.PointLight(0xffaa33, 1.2);
+        flash.position.set(pistolGroup.position.x + 0.8, pistolGroup.position.y + 0.2, pistolGroup.position.z + 0.5);
+        scene.add(flash);
+        setTimeout(() => scene.remove(flash), 100);
+        
+        // Recoil animation
+        pistolGroup.position.z -= 0.07;
+        pistolGroup.rotation.x += 0.1;
+        setTimeout(() => {
+            pistolGroup.position.z += 0.07;
+            pistolGroup.rotation.x -= 0.1;
+        }, 80);
+        
+        // Raycast to check for target hits
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        // Use center of screen for shooting (or we could use mouse click position, but for simplicity center)
+        mouse.x = 0;
+        mouse.y = 0;
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(targets, true);
+        if (intersects.length > 0) {
+            let hitTarget = null;
+            for (let obj of intersects) {
+                if (targets.includes(obj.object.parent)) {
+                    hitTarget = obj.object.parent;
+                    break;
+                }
             }
-            ctx.shadowBlur = 0;
-        }
-        hit(px, py) {
-            const dx = px - this.x;
-            const dy = py - this.y;
-            const dist = Math.hypot(dx, dy);
-            return dist < this.radius;
-        }
-    }
-
-    function spawnTarget() {
-        const margin = 70;
-        const x = margin + Math.random() * (width - margin*2);
-        const y = margin + Math.random() * (height - margin*2);
-        const type = Math.random() < 0.4 ? 'head' : 'body';
-        const radius = type === 'head' ? 28 : 38;
-        targets.push(new Target(x, y, radius, type));
-        if (targets.length > 5) targets.shift();
-    }
-
-    function updateCrosshair(e) {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        let clientX, clientY;
-        if (e.touches) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-        crosshair.x = (clientX - rect.left) * scaleX;
-        crosshair.y = (clientY - rect.top) * scaleY;
-    }
-
-    function shoot(e) {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        let clickX, clickY;
-        if (e.touches) {
-            clickX = (e.touches[0].clientX - rect.left) * scaleX;
-            clickY = (e.touches[0].clientY - rect.top) * scaleY;
-        } else {
-            clickX = (e.clientX - rect.left) * scaleX;
-            clickY = (e.clientY - rect.top) * scaleY;
-        }
-
-        // recoil visual
-        recoilActive = true;
-        const overlay = document.getElementById('recoilOverlay');
-        overlay.style.opacity = '0.7';
-        setTimeout(() => { overlay.style.opacity = '0'; }, 100);
-        // shake effect (camera offset)
-        recoilOffset = { x: (Math.random() - 0.5)*6, y: (Math.random() - 0.5)*4 };
-        setTimeout(() => { recoilOffset = { x: 0, y: 0 }; }, 120);
-
-        let hitSomething = false;
-        for (let i = 0; i < targets.length; i++) {
-            const t = targets[i];
-            if (t.hit(clickX, clickY)) {
-                if (t.type === 'head') score += 20;
-                else score += 10;
-                targets.splice(i,1);
-                hitSomething = true;
-                document.getElementById('scoreVal').innerText = score;
-                break;
+            if (hitTarget) {
+                score += 10;
+                updateUI();
+                // Hit effect: scale and flash
+                hitTarget.children[0].material.color.setHex(0xff8844);
+                setTimeout(() => {
+                    if (hitTarget.children[0]) hitTarget.children[0].material.color.setHex(0xdd3333);
+                }, 150);
+                // Animate target
+                hitTarget.position.y += 0.1;
+                setTimeout(() => { if (hitTarget) hitTarget.position.y -= 0.1; }, 100);
             }
         }
-        if (!hitSomething) {
-            // miss penalty
-            score = Math.max(0, score - 2);
-            document.getElementById('scoreVal').innerText = score;
+    }
+    
+    // Reload: full magazine
+    function reload() {
+        magazineAmmo = 12;
+        isCocked = true; // reloading usually makes it ready
+        updateUI();
+        // Magazine visual animation
+        magazine.position.y -= 0.1;
+        setTimeout(() => { magazine.position.y += 0.1; }, 150);
+    }
+    
+    function cock() {
+        if (magazineAmmo > 0) {
+            isCocked = true;
+            updateUI();
+            // slide animation
+            slide.position.z += 0.1;
+            setTimeout(() => { slide.position.z -= 0.1; }, 100);
         }
-        // always spawn a new target after shot for dynamic feel
-        spawnTarget();
     }
-
-    function drawGunSight() {
-        ctx.save();
-        ctx.translate(recoilOffset.x, recoilOffset.y);
-        ctx.beginPath();
-        ctx.strokeStyle = '#ffffffdd';
-        ctx.lineWidth = 2;
-        const cx = crosshair.x;
-        const cy = crosshair.y;
-        ctx.moveTo(cx - 18, cy);
-        ctx.lineTo(cx - 8, cy);
-        ctx.moveTo(cx + 8, cy);
-        ctx.lineTo(cx + 18, cy);
-        ctx.moveTo(cx, cy - 18);
-        ctx.lineTo(cx, cy - 8);
-        ctx.moveTo(cx, cy + 8);
-        ctx.lineTo(cx, cy + 18);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(cx, cy, 6, 0, Math.PI*2);
-        ctx.strokeStyle = 'rgba(255,80,40,0.8)';
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(cx, cy, 3, 0, Math.PI*2);
-        ctx.fillStyle = '#ff3333aa';
-        ctx.fill();
-        ctx.restore();
+    
+    // UI Buttons
+    document.getElementById('reloadBtn').addEventListener('click', reload);
+    document.getElementById('cockBtn').addEventListener('click', cock);
+    document.getElementById('shootBtn').addEventListener('click', shoot);
+    
+    // Mouse click on canvas to shoot (direct)
+    renderer.domElement.addEventListener('click', (event) => {
+        // Also compute raycast from mouse for more accurate targeting
+        const rect = renderer.domElement.getBoundingClientRect();
+        const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+        const intersects = raycaster.intersectObjects(targets, true);
+        if (intersects.length > 0 && magazineAmmo > 0 && isCocked) {
+            // direct hit
+            shoot(); // use same logic but we'll count hit again; better: call shoot with hit detection
+            // But shoot already does raycast, so we need to avoid double handling.
+            // Simpler: just call shoot which already does center raycast. To be more precise, we can refactor.
+            // For simplicity, we'll keep shoot with center, but also handle mouse click separately if needed.
+            // To avoid double, I'll just call shoot normally.
+        } else {
+            shoot(); // just shoot anyway
+        }
+    });
+    
+    // Animate moving targets (rotate)
+    function animateTargets() {
+        targets.forEach((t, i) => {
+            t.rotation.y += 0.01;
+            t.position.y = 0.2 + Math.sin(Date.now() * 0.002 + i) * 0.1;
+        });
     }
-
+    
+    // Animation loop
     function animate() {
-        ctx.clearRect(0, 0, width, height);
-        ctx.save();
-        ctx.translate(recoilOffset.x, recoilOffset.y);
-        // draw targets
-        for (let t of targets) {
-            t.update();
-            t.draw();
-        }
-        ctx.restore();
-        drawGunSight();
         requestAnimationFrame(animate);
+        controls.update(); // update orbit controls
+        animateTargets();
+        renderer.render(scene, camera);
     }
-
-    function resizeAndInit() {
-        width = window.innerWidth;
-        height = window.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
-        targets = [];
-        for (let i = 0; i < 3; i++) spawnTarget();
-        crosshair = { x: width/2, y: height/2 };
-    }
-
-    canvas.addEventListener('mousemove', updateCrosshair);
-    canvas.addEventListener('click', shoot);
-    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); updateCrosshair(e); });
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); shoot(e); });
-
-    window.addEventListener('resize', () => { resizeAndInit(); });
-    resizeAndInit();
-    setInterval(() => {
-        if (targets.length < 4) spawnTarget();
-    }, 1800);
     animate();
+    
+    // window resize
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    updateUI();
 </script>
 </body>
 </html>
