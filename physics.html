@@ -3,64 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AI Simulations | Satisfying Physics</title>
+    <title>AI Simulations | Satisfying Physics Playground</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background: #030712;
+            background: #05070f;
             font-family: 'Segoe UI', system-ui;
         }
         canvas {
             display: block;
-            cursor: pointer;
+            cursor: crosshair;
         }
         .controls {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: #0f212eb3;
+            background: rgba(0,0,0,0.7);
             backdrop-filter: blur(12px);
-            padding: 12px 20px;
-            border-radius: 40px;
+            padding: 12px 24px;
+            border-radius: 50px;
             display: flex;
-            gap: 16px;
+            gap: 18px;
             z-index: 20;
             pointer-events: auto;
         }
         button {
             background: #1f4a5e;
             border: none;
-            padding: 6px 18px;
+            padding: 8px 20px;
             border-radius: 40px;
             color: white;
             font-weight: bold;
             cursor: pointer;
             transition: 0.2s;
+            font-family: monospace;
         }
         button:hover {
-            background: cyan;
+            background: #ff77aa;
             color: black;
-            box-shadow: 0 0 12px cyan;
+            box-shadow: 0 0 15px #ff77aa;
         }
         a {
             position: absolute;
             top: 20px;
             left: 20px;
-            color: cyan;
-            background: #000000aa;
-            padding: 6px 16px;
-            border-radius: 40px;
+            color: #ff77aa;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 30px;
             text-decoration: none;
             font-weight: bold;
             z-index: 30;
         }
-        .info-panel {
+        .info {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: #00000099;
-            backdrop-filter: blur(8px);
+            background: rgba(0,0,0,0.6);
             padding: 8px 18px;
             border-radius: 40px;
             color: #ccddff;
@@ -72,23 +72,23 @@
 <body>
 <a href="index.html">← HOME</a>
 <div class="controls">
-    <button id="addBalls">➕ ADD BALLS (10)</button>
-    <button id="gravityToggle">🔄 GRAVITY: ON</button>
-    <button id="clearBtn">🧹 CLEAR ALL</button>
+    <button id="addBtn">➕ ADD 20 PARTICLES</button>
+    <button id="gravityToggle">🌌 GRAVITY: ON</button>
+    <button id="clearBtn">🌀 RESET</button>
 </div>
-<div class="info-panel">✨ Satisfying collisions · mouse attraction · elastic energy</div>
+<div class="info">✨ Mouse attraction | Elastic collisions | Satisfying springs between close particles</div>
 <canvas id="physicsCanvas"></canvas>
 <script>
     const canvas = document.getElementById('physicsCanvas');
     const ctx = canvas.getContext('2d');
     let width, height;
-    let balls = [];
+    let particles = [];
+    let springs = [];
     let gravityOn = true;
-    let mouseX = null, mouseY = null;
-    let mouseRadius = 100;
-    let mouseForce = 1.2;
+    let mouse = { x: null, y: null, radius: 120, strength: 1.2 };
+    let lastTimestamp = 0;
 
-    class Ball {
+    class Particle {
         constructor(x, y, vx, vy, radius, color) {
             this.x = x; this.y = y;
             this.vx = vx; this.vy = vy;
@@ -100,126 +100,183 @@
             if (gravityOn) this.vy += 0.2;
             this.x += this.vx;
             this.y += this.vy;
-            // boundary collisions with bounce & energy loss
-            if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx * 0.95; }
-            if (this.x + this.radius > width) { this.x = width - this.radius; this.vx = -this.vx * 0.95; }
-            if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy * 0.95; }
-            if (this.y + this.radius > height) { this.y = height - this.radius; this.vy = -this.vy * 0.92; }
+            // boundary bounce with energy loss
+            if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx * 0.96; }
+            if (this.x + this.radius > width) { this.x = width - this.radius; this.vx = -this.vx * 0.96; }
+            if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy * 0.96; }
+            if (this.y + this.radius > height) { this.y = height - this.radius; this.vy = -this.vy * 0.94; }
         }
         draw() {
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fillStyle = this.color;
             ctx.shadowBlur = 12;
-            ctx.shadowColor = 'rgba(0,255,200,0.5)';
+            ctx.shadowColor = this.color;
             ctx.fill();
-            ctx.shadowBlur = 0;
-            // highlight core
+            // inner highlight
             ctx.beginPath();
-            ctx.arc(this.x-2, this.y-2, this.radius*0.3, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,200,0.7)';
+            ctx.arc(this.x - 2, this.y - 2, this.radius * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,200,0.8)';
             ctx.fill();
         }
     }
 
     function handleCollisions() {
-        for (let i = 0; i < balls.length; i++) {
-            for (let j = i+1; j < balls.length; j++) {
-                const b1 = balls[i];
-                const b2 = balls[j];
-                const dx = b1.x - b2.x;
-                const dy = b1.y - b2.y;
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const p1 = particles[i];
+                const p2 = particles[j];
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
                 const dist = Math.hypot(dx, dy);
-                const minDist = b1.radius + b2.radius;
+                const minDist = p1.radius + p2.radius;
                 if (dist < minDist) {
                     const angle = Math.atan2(dy, dx);
                     const overlap = minDist - dist;
                     const moveX = Math.cos(angle) * overlap * 0.5;
                     const moveY = Math.sin(angle) * overlap * 0.5;
-                    if (!b1.fixed) { b1.x += moveX; b1.y += moveY; }
-                    if (!b2.fixed) { b2.x -= moveX; b2.y -= moveY; }
+                    p1.x += moveX; p1.y += moveY;
+                    p2.x -= moveX; p2.y -= moveY;
                     
                     const nx = dx / dist;
                     const ny = dy / dist;
-                    const vrelx = b1.vx - b2.vx;
-                    const vrely = b1.vy - b2.vy;
+                    const vrelx = p1.vx - p2.vx;
+                    const vrely = p1.vy - p2.vy;
                     const velAlong = vrelx * nx + vrely * ny;
                     if (velAlong < 0) {
                         const e = 0.85;
-                        const m1 = b1.mass, m2 = b2.mass;
-                        const imp = (1+e) * velAlong / (m1 + m2);
-                        b1.vx -= imp * m2 * nx;
-                        b1.vy -= imp * m2 * ny;
-                        b2.vx += imp * m1 * nx;
-                        b2.vy += imp * m1 * ny;
+                        const m1 = p1.mass, m2 = p2.mass;
+                        const imp = (1 + e) * velAlong / (m1 + m2);
+                        p1.vx -= imp * m2 * nx;
+                        p1.vy -= imp * m2 * ny;
+                        p2.vx += imp * m1 * nx;
+                        p2.vy += imp * m1 * ny;
                     }
                 }
             }
         }
     }
 
-    function applyMouseForce() {
-        if (mouseX === null) return;
-        for (let b of balls) {
-            const dx = b.x - mouseX;
-            const dy = b.y - mouseY;
-            const dist = Math.hypot(dx, dy);
-            if (dist < mouseRadius) {
-                const force = (1 - dist / mouseRadius) * mouseForce;
-                const angle = Math.atan2(dy, dx);
-                const fx = Math.cos(angle) * force * 1.2;
-                const fy = Math.sin(angle) * force * 1.2;
-                b.vx += fx;
-                b.vy += fy;
+    // Create springs between particles within a certain distance (satisfying connections)
+    function updateSprings() {
+        springs = [];
+        const springDistance = 85;
+        const stiffness = 0.06;
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const p1 = particles[i];
+                const p2 = particles[j];
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < springDistance) {
+                    springs.push({ p1, p2, rest: dist, stiff: stiffness });
+                }
             }
         }
     }
 
-    function addRandomBalls(count) {
-        for (let i = 0; i < count; i++) {
-            const radius = 8 + Math.random() * 16;
-            const x = Math.random() * (width - radius*2) + radius;
-            const y = Math.random() * (height - radius*2) + radius;
-            const vx = (Math.random() - 0.5) * 4;
-            const vy = (Math.random() - 0.5) * 4;
-            const hue = (Math.random() * 60 + 180) % 360;
-            const color = `hsl(${hue}, 80%, 60%)`;
-            balls.push(new Ball(x, y, vx, vy, radius, color));
+    function solveSprings() {
+        for (let s of springs) {
+            const dx = s.p1.x - s.p2.x;
+            const dy = s.p1.y - s.p2.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist === 0) continue;
+            const diff = (dist - s.rest) / dist;
+            const force = diff * s.stiff;
+            const fx = dx * force;
+            const fy = dy * force;
+            s.p1.x -= fx;
+            s.p1.y -= fy;
+            s.p2.x += fx;
+            s.p2.y += fy;
         }
     }
 
-    function clearBalls() {
-        balls = [];
-        addRandomBalls(12); // keep some action
+    function applyMouseForce() {
+        if (mouse.x === null) return;
+        for (let p of particles) {
+            const dx = p.x - mouse.x;
+            const dy = p.y - mouse.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < mouse.radius) {
+                const force = (1 - dist / mouse.radius) * mouse.strength;
+                const angle = Math.atan2(dy, dx);
+                const fx = Math.cos(angle) * force * 1.4;
+                const fy = Math.sin(angle) * force * 1.4;
+                p.vx += fx;
+                p.vy += fy;
+            }
+        }
+    }
+
+    function addParticles(count) {
+        for (let i = 0; i < count; i++) {
+            const radius = 6 + Math.random() * 14;
+            const x = Math.random() * (width - radius * 2) + radius;
+            const y = Math.random() * (height - radius * 2) + radius;
+            const vx = (Math.random() - 0.5) * 3;
+            const vy = (Math.random() - 0.5) * 3;
+            const hue = (Math.random() * 360) % 360;
+            const color = `hsl(${hue}, 80%, 65%)`;
+            particles.push(new Particle(x, y, vx, vy, radius, color));
+        }
+        updateSprings();
+    }
+
+    function clearParticles() {
+        particles = [];
+        addParticles(30);
+        updateSprings();
+    }
+
+    function update() {
+        for (let p of particles) p.update();
+        handleCollisions();
+        applyMouseForce();
+        updateSprings();
+        solveSprings();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+        // Background gradient
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, '#0a0a20');
+        grad.addColorStop(1, '#010005');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+        
+        // Draw springs as glowing lines
+        for (let s of springs) {
+            ctx.beginPath();
+            ctx.moveTo(s.p1.x, s.p1.y);
+            ctx.lineTo(s.p2.x, s.p2.y);
+            const distFactor = Math.min(1, Math.abs(s.rest - Math.hypot(s.p1.x - s.p2.x, s.p1.y - s.p2.y)) / 20);
+            ctx.strokeStyle = `rgba(100, 200, 255, ${0.2 + distFactor * 0.5})`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+        
+        // Draw particles
+        for (let p of particles) p.draw();
+        
+        // Mouse attraction halo
+        if (mouse.x !== null) {
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, mouse.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,100,200,0.1)';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+        }
     }
 
     function animate() {
-        ctx.clearRect(0, 0, width, height);
-        // draw background glow
-        ctx.fillStyle = '#03071e';
-        ctx.fillRect(0,0,width,height);
-        
-        for (let b of balls) {
-            b.update();
-        }
-        handleCollisions();
-        applyMouseForce();
-        
-        for (let b of balls) {
-            b.draw();
-        }
-        
-        // draw mouse influence field
-        if (mouseX !== null) {
-            ctx.beginPath();
-            ctx.arc(mouseX, mouseY, mouseRadius, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(0,255,200,0.08)';
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(mouseX, mouseY, 8, 0, Math.PI*2);
-            ctx.fillStyle = 'cyan';
-            ctx.fill();
-        }
+        update();
+        draw();
         requestAnimationFrame(animate);
     }
 
@@ -228,11 +285,11 @@
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
-        balls = [];
-        addRandomBalls(18);
+        particles = [];
+        addParticles(45);
     }
 
-    // Mouse events for attraction
+    // Mouse events
     function onMouseMove(e) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -245,25 +302,24 @@
             clientX = e.clientX;
             clientY = e.clientY;
         }
-        mouseX = (clientX - rect.left) * scaleX;
-        mouseY = (clientY - rect.top) * scaleY;
+        mouse.x = (clientX - rect.left) * scaleX;
+        mouse.y = (clientY - rect.top) * scaleY;
     }
-    function onMouseLeave() { mouseX = null; mouseY = null; }
-    
+    function onMouseLeave() { mouse.x = null; mouse.y = null; }
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseleave', onMouseLeave);
     canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMouseMove(e); });
-    canvas.addEventListener('touchend', () => { mouseX = null; });
+    canvas.addEventListener('touchend', () => { mouse.x = null; });
 
-    document.getElementById('addBalls').addEventListener('click', () => addRandomBalls(10));
-    document.getElementById('clearBtn').addEventListener('click', () => clearBalls());
+    document.getElementById('addBtn').addEventListener('click', () => addParticles(20));
+    document.getElementById('clearBtn').addEventListener('click', () => clearParticles());
     const gravBtn = document.getElementById('gravityToggle');
     gravBtn.addEventListener('click', () => {
         gravityOn = !gravityOn;
-        gravBtn.innerText = gravityOn ? "🔄 GRAVITY: ON" : "🔄 GRAVITY: OFF";
+        gravBtn.innerText = gravityOn ? "🌌 GRAVITY: ON" : "🌌 GRAVITY: OFF";
     });
-    
-    window.addEventListener('resize', () => resizeCanvas());
+
+    window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     animate();
 </script>
